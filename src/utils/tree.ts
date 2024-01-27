@@ -16,17 +16,19 @@ export async function generateFSTree(
 
   const files = await globby("**/*.*", { cwd: dir, ignore: ["*.map"] });
 
-  const items = (
-    await Promise.all(
-      files.map(async (file) => {
-        const path = resolve(dir, file);
-        const src = await fsp.readFile(path);
-        const size = src.byteLength;
-        const gzip = options.compressedSizes ? await gzipSize(src) : 0;
-        return { file, path, size, gzip };
-      })
-    )
-  ).sort((a, b) => a.path.localeCompare(b.path));
+  // from https://github.com/unjs/nitro/issues/1833#issuecomment-1772762009
+  // read file parallelly to avoid OOM
+  const items = []
+  for (const file of files) {
+    const path = resolve(dir, file);
+    const src = await promises.readFile(path);
+    const size = src.byteLength;
+    const gzip = options.compressedSizes ? await gzipSize(src) : 0;
+
+    const fileMapped = { file, path, size, gzip };
+    items.push(fileMapped);
+  }
+  items.sort((a, b) => a.path.localeCompare(b.path));
 
   let totalSize = 0;
   let totalGzip = 0;
